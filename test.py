@@ -50,16 +50,21 @@ class DockerManager:
         return port, db_name, project_name
 
     @classmethod
-    def build_main_image(cls, project):
+    def build_main_image(cls, project, plan_dir):
         """
-        Build the Docker image for the main app using the Dockerfile in the current directory.
+        Build the Docker image for the main app using the Dockerfile in the specified plan directory.
         The image is tagged as {project}_cyber:latest.
+        
+        Args:
+            project (str): Project name for the container
+            plan_dir (str): Directory path containing the Dockerfile
         """
         client = docker.from_env()
         tag = f"{project}_cyber:latest"
         try:
             # Build the image (this may take some time)
-            image, logs = client.images.build(path=".", dockerfile="Dockerfile", tag=tag, rm=True)
+            print(f"Building image from {plan_dir} with tag {tag}")
+            image, logs = client.images.build(path=plan_dir, dockerfile="Dockerfile", tag=tag, rm=True)
             # Optionally, you can log the build output:
             for chunk in logs:
                 if 'stream' in chunk:
@@ -117,10 +122,17 @@ class DockerManager:
             raise Exception(f"Failed to deploy Postgres: {str(e)}")
 
     @classmethod
-    def deploy_main_container(cls, project, host_port, db_password, db_name):
+    def deploy_main_container(cls, project, host_port, db_password, db_name, plan_dir):
         """
         Deploy the main application container after building the image.
         Connects to the same network as the PostgreSQL container.
+        
+        Args:
+            project (str): Project name for the container
+            host_port (int): Port to expose on the host
+            db_password (str): Database password
+            db_name (str): Database name
+            plan_dir (str): Directory path containing the Dockerfile
         """
         client = docker.from_env()
         container_name = f"{project}_cyber"
@@ -137,7 +149,7 @@ class DockerManager:
             try:
                 client.images.get(f"{project}_cyber:latest")
             except docker.errors.ImageNotFound:
-                cls.build_main_image(project)
+                cls.build_main_image(project, plan_dir)
                 
             main_image = f"{project}_cyber:latest"
             
@@ -192,7 +204,8 @@ class DockerManager:
                 project=project_name,
                 host_port=port,
                 db_password="db1",
-                db_name=db_name
+                db_name=db_name,
+                plan_dir=plan_dir
             )
 
             # Create container record in database for main container
